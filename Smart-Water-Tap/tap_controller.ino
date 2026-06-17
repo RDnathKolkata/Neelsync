@@ -1,6 +1,11 @@
 #include <FastLED.h>
 #include <Wire.h>
 #include <VL53L0X.h>
+#include <esp_now.h>
+#include <WiFi.h>
+#include "tap_protocol.h"
+
+uint8_t masterMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}; // Replace with real MAC
 
 VL53L0X tof;
 #define HAND_THRESHOLD_MM   200   // VL53L0X XSHUT detection in mm
@@ -41,6 +46,9 @@ State currentState = IDLE;
 
 // Runtime variables 
 
+uint32_t sessionRuntime = 0;
+uint32_t totalRuntime   = 0;
+uint8_t  errorFlags     = 0;
 unsigned long lastHandSeenTime = 0;        // Timestamp of the last successful IR hit
 unsigned long stateStartTime  = 0;   // When the current DISPENSING cycle began
 unsigned long lastBlinkTime   = 0;   // Tracks blink toggling during WARNING
@@ -48,6 +56,7 @@ unsigned long lastDebounceTime = 0;  // For button debounce
 bool blinkToggle              = false;
 bool lastRawButtonState       = HIGH;
 bool stableButtonState        = HIGH;
+
 
 // Helper: valve control
 
@@ -158,6 +167,31 @@ Serial.println("[ToF] VL53L0X ready");
 
   enterIdle();
 }
+
+
+//send packet on every state change + every N seconds during DISPENSING
+void sendTapPacket() {
+  TapPacket pkt;
+  pkt.nodeID         = 1;
+  pkt.valveOpen      = (currentState == DISPENSING || currentState == WARNING) ? 1 : 0;
+  pkt.state          = (uint8_t)currentState;
+  pkt.sessionRuntime = sessionRuntime;
+  pkt.totalRuntime   = totalRuntime;
+  pkt.errorFlags     = errorFlags;
+  pkt.timestamp      = millis();
+  esp_now_send(masterMAC, (uint8_t*)&pkt, sizeof(pkt));
+}
+
+// Receive callback and listen for shutdown
+void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  MasterPacket cmd;
+  memcpy(&cmd, data, sizeof(cmd));
+  if (cmd.command == 0x01 && cmd.targetNodeID == 1) {
+    Serial.println("[ESP-NOW] REMOTE SHUTDOWN received");
+    enterCooldown();
+  }
+}
+
 
 // Main loop
 
