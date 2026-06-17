@@ -25,6 +25,8 @@ const unsigned long WARNING_DURATION    = 10000UL;   // Last 2 s blinking warnin
 const unsigned long COOLDOWN_DURATION   = 5000UL;   // 5-second lockout after closing
 const unsigned long BLINK_INTERVAL      = 300UL;    // LED blink rate during warning
 const unsigned long DEBOUNCE_DELAY      = 50UL;     // Button debounce window (ms)
+const unsigned long GRACE_PERIOD = 2000UL; // 2 seconds of "extra" water after hand leaves
+
 
 //State machine
 
@@ -39,6 +41,7 @@ State currentState = IDLE;
 
 // Runtime variables 
 
+unsigned long lastHandSeenTime = 0;        // Timestamp of the last successful IR hit
 unsigned long stateStartTime  = 0;   // When the current DISPENSING cycle began
 unsigned long lastBlinkTime   = 0;   // Tracks blink toggling during WARNING
 unsigned long lastDebounceTime = 0;  // For button debounce
@@ -83,6 +86,7 @@ void enterIdle() {
 void enterDispensing() {
   currentState   = DISPENSING;
   stateStartTime = millis();  // Anchor: all timing is relative to this
+  lastHandSeenTime = millis(); 
   openValve();
   setLEDs(CRGB::Blue);
   Serial.println("[STATE] DISPENSING — 60 s clock started");
@@ -158,9 +162,14 @@ Serial.println("[ToF] VL53L0X ready");
 // Main loop
 
 void loop() {
-  unsigned long now         = millis();
-  bool handDetected         = readHandDetected(); 
-  bool buttonPressed        = buttonJustPressed();
+  unsigned long now = millis();
+  bool handDetected = readHandDetected(); 
+  bool buttonPressed = buttonJustPressed();
+
+  // Update the "last seen" timer whenever a hand is detected
+  if (handDetected) {
+    lastHandSeenTime = now;
+  }
 
   //  Manual override button 
   if (buttonPressed) {
@@ -186,25 +195,24 @@ void loop() {
       break;
 
     case DISPENSING: {
-    
-    // Early cutoff if hand removed
-    if (!handDetected) {
-        Serial.println("[IR] Hand removed — closing early");
-        enterCooldown();
-        break;
-    }
-    unsigned long elapsed = now - stateStartTime;
-    // Transition to WARNING when entering the last WARNING_DURATION millisecond
-    if (elapsed >= VALVE_OPEN_DURATION - WARNING_DURATION) {
-        enterWarning();
-    }
+        // Logic: Only close if the hand has been gone for LONGER than the grace period
+        if (now - lastHandSeenTime > GRACE_PERIOD) {
+            Serial.println("[IR] Hand gone too long — closing early");
+            enterCooldown();
+            break;
+        }
 
-      break;
-    }
+        unsigned long elapsed = now - stateStartTime;
+        if (elapsed >= VALVE_OPEN_DURATION - WARNING_DURATION) {
+            enterWarning();
+        }
+        break;
+
+       }
 
     case WARNING: {
-        if (!handDetected) {
-            Serial.println("[IR] Hand removed during warning — closing early");
+        if (now - lastHandSeenTime > GRACE_PERIOD) {
+            Serial.println("[IR] Hand gone too long during warning — closing early");
             enterCooldown();
             break;
         }
