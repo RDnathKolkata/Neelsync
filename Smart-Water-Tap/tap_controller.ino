@@ -56,6 +56,7 @@ unsigned long lastDebounceTime = 0;  // For button debounce
 bool blinkToggle              = false;
 bool lastRawButtonState       = HIGH;
 bool stableButtonState        = HIGH;
+bool isManualOverride = false;
 
 
 // Helper: valve control
@@ -86,11 +87,6 @@ bool readHandDetected() {
 
 // State transition functions
 
-void enterIdle() {
-  currentState = IDLE;
-  setLEDs(CRGB::Green);
-  Serial.println("[STATE] IDLE — ready");
-}
 
 void enterDispensing() {
   currentState   = DISPENSING;
@@ -99,6 +95,7 @@ void enterDispensing() {
   openValve();
   setLEDs(CRGB::Blue);
   Serial.println("[STATE] DISPENSING — 60 s clock started");
+  sendTapPacket();
 }
 
 void enterWarning() {
@@ -106,12 +103,15 @@ void enterWarning() {
   lastBlinkTime = millis();
   blinkToggle   = false;
   Serial.println("[STATE] WARNING — closing in 2 s");
+  sendTapPacket();
 }
 
 void enterCooldown() {
   currentState   = COOLDOWN;
   stateStartTime = millis();  // Reset anchor for cooldown timer
   closeValve();
+  sessionRuntime = millis() - stateStartTime;
+  totalRuntime += sessionRuntime;
   setLEDs(CRGB::Red);
   Serial.println("[STATE] COOLDOWN — 5 s lockout");
 }
@@ -169,6 +169,13 @@ Serial.println("[ToF] VL53L0X ready");
 }
 
 
+void enterIdle() {
+  currentState = IDLE;
+  setLEDs(CRGB::Green);
+  Serial.println("[STATE] IDLE — ready");
+  sendTapPacket();
+}
+
 //send packet on every state change + every N seconds during DISPENSING
 void sendTapPacket() {
   TapPacket pkt;
@@ -208,6 +215,7 @@ void loop() {
   //  Manual override button 
   if (buttonPressed) {
     if (currentState == IDLE) {
+      isManualOverride = true;
       Serial.println("[BTN] Force-open");
       enterDispensing();
       return;
@@ -230,7 +238,7 @@ void loop() {
 
     case DISPENSING: {
         // Logic: Only close if the hand has been gone for LONGER than the grace period
-        if (now - lastHandSeenTime > GRACE_PERIOD) {
+        if (!isManualOverride && (now - lastHandSeenTime > GRACE_PERIOD)) {
             Serial.println("[IR] Hand gone too long — closing early");
             enterCooldown();
             break;
@@ -245,7 +253,7 @@ void loop() {
        }
 
     case WARNING: {
-        if (now - lastHandSeenTime > GRACE_PERIOD) {
+        if (!isManualOverride && (now - lastHandSeenTime > GRACE_PERIOD)) {
             Serial.println("[IR] Hand gone too long during warning — closing early");
             enterCooldown();
             break;

@@ -34,18 +34,14 @@ void forwardToServer(TapPacket &pkt) {
   http.begin(SERVER_URL);
   http.addHeader("Content-Type", "application/json");
 
-  String body = "{";
-  body += "\"nodeID\":"         + String(pkt.nodeID)         + ",";
-  body += "\"valveOpen\":"      + String(pkt.valveOpen)      + ",";
-  body += "\"state\":"          + String(pkt.state)          + ",";
-  body += "\"sessionRuntime\":" + String(pkt.sessionRuntime) + ",";
-  body += "\"totalRuntime\":"   + String(pkt.totalRuntime)   + ",";
-  body += "\"errorFlags\":"     + String(pkt.errorFlags)     + ",";
-  body += "\"timestamp\":"      + String(pkt.timestamp);
-  body += "}";
+char body[150];
+snprintf(body, sizeof(body), 
+    "{\"nodeID\":%d,\"valveOpen\":%d,\"state\":%d,\"sessionRuntime\":%lu,\"totalRuntime\":%lu,\"errorFlags\":%d,\"timestamp\":%lu}",
+    pkt.nodeID, pkt.valveOpen, pkt.state, pkt.sessionRuntime, pkt.totalRuntime, pkt.errorFlags, pkt.timestamp
+);
+http.POST(body);
+http.end();
 
-  http.POST(body);
-  http.end();
 }
 
 void setup() {
@@ -67,6 +63,11 @@ void setup() {
 }
 
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.disconnect();
+    WiFi.reconnect();
+    delay(5000);
+  }
   // Server can POST back a shutdown command here
   // Poll or use webhook → call sendShutdown(1)
 }
