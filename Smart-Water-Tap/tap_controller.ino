@@ -3,6 +3,7 @@
 #include <VL53L0X.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include "tap_protocol.h"
 
 uint8_t masterMAC[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}; // Replace with real MAC
@@ -107,11 +108,12 @@ void enterWarning() {
 }
 
 void enterCooldown() {
+  sessionRuntime = millis() - stateStartTime;
+  totalRuntime += sessionRuntime;
+  Serial.printf("[RUNTIME] Session: %lu ms, Total: %lu ms\n", sessionRuntime, totalRuntime);
   currentState   = COOLDOWN;
   stateStartTime = millis();  // Reset anchor for cooldown timer
   closeValve();
-  sessionRuntime = millis() - stateStartTime;
-  totalRuntime += sessionRuntime;
   isManualOverride = false;
   setLEDs(CRGB::Red);
   Serial.println("[STATE] COOLDOWN — 5 s lockout");
@@ -147,6 +149,20 @@ bool buttonJustPressed() {
 //  Setup 
 
 void setup() {
+  WiFi.mode(WIFI_STA);
+esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+
+if (esp_now_init() != ESP_OK) {
+  Serial.println("[ERROR] ESP-NOW init failed");
+}
+esp_now_register_recv_cb(onDataRecv);
+
+esp_now_peer_info_t peer = {};
+memcpy(peer.peer_addr, masterMAC, 6);
+peer.channel = ESPNOW_CHANNEL;
+peer.encrypt = false;
+esp_now_add_peer(&peer);
+
   Serial.begin(115200);
   Serial.println("\n=== Tap Controller Boot ===");
 

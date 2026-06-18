@@ -8,14 +8,15 @@ const char* WIFI_SSID     = "your_ssid"; // change
 const char* WIFI_PASS     = "your_password"; // CHANGE
 const char* SERVER_URL    = "https://yourserver.com/api/tap"; // CHANGEEE
 
-uint8_t tapMAC[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}; // Tap Node MAC
+uint8_t tapMAC[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}; // Tap Node MAC, CHANGE
+
+bool serverPostPending = false;
+TapPacket pendingPacket;
 
 //ESP-NOW receive callback 
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
-  TapPacket pkt;
-  memcpy(&pkt, data, sizeof(pkt));
-  // Forward to server
-  forwardToServer(pkt);
+  memcpy(&pendingPacket, data, sizeof(pendingPacket));
+  serverPostPending = true;   // no network calls here
 }
 
 // Send shutdown to Tap
@@ -63,11 +64,19 @@ void setup() {
 }
 
 void loop() {
+
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.disconnect();
     WiFi.reconnect();
     delay(5000);
+    return;
   }
+
+  if (serverPostPending) {
+    forwardToServer(pendingPacket);
+    serverPostPending = false;
+  }
+
   // Server can POST back a shutdown command here
   // Poll or use webhook → call sendShutdown(1)
 }
