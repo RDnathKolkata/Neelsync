@@ -73,6 +73,7 @@ unsigned long GRACE_PERIOD        = 2000UL;    // ms
 #define MAX_BLINK            1000UL
 #define MIN_GRACE            500UL
 #define MAX_GRACE            10000UL
+#define DEBOUNCE_DELAY       50UL
 
 //  TAP NODE — VL53L0X
 
