@@ -25,8 +25,8 @@ CRGB leds[NUM_LEDS];
 
 //  Timing constants (in ms)
 
-const unsigned long VALVE_OPEN_DURATION = 60000UL;  // 60 seconds total open time
-const unsigned long WARNING_DURATION    = 10000UL;   // Last 2 s blinking warning
+const unsigned long VALVE_OPEN_DURATION = 45000UL;  // 45 seconds total open time
+const unsigned long WARNING_DURATION    = 10000UL;   // Last 10 s blinking warning
 const unsigned long COOLDOWN_DURATION   = 5000UL;   // 5-second lockout after closing
 const unsigned long BLINK_INTERVAL      = 300UL;    // LED blink rate during warning
 const unsigned long DEBOUNCE_DELAY      = 50UL;     // Button debounce window (ms)
@@ -112,8 +112,10 @@ void enterCooldown() {
   closeValve();
   sessionRuntime = millis() - stateStartTime;
   totalRuntime += sessionRuntime;
+  isManualOverride = false;
   setLEDs(CRGB::Red);
   Serial.println("[STATE] COOLDOWN — 5 s lockout");
+  isManualOverride = false;
 }
 
 // Button debounce 
