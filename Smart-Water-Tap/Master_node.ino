@@ -80,3 +80,5 @@ void loop() {
   // Server can POST back a shutdown command here
   // Poll or use webhook → call sendShutdown(1)
 }
+
+// RDnathKolkata
